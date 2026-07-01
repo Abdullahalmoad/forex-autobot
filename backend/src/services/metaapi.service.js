@@ -1,0 +1,71 @@
+const MetaApi = require('metaapi.cloud-sdk').default;
+
+const token = process.env.METAAPI_TOKEN;
+if (!token) {
+  console.warn('⚠️  METAAPI_TOKEN غير موجود بمتغيرات البيئة - خدمة MetaApi لن تعمل.');
+}
+
+const api = new MetaApi(token);
+
+async function connectAccount({ login, password, server, accountType }) {
+  const account = await api.metatraderAccountApi.createAccount({
+    name: `user-${login}`,
+    type: 'cloud',
+    login,
+    password,
+    server,
+    platform: 'mt5',
+    magic: 900000,
+    reliability: accountType === 'live' ? 'high' : 'regular',
+  });
+
+  await account.deploy();
+  await account.waitConnected();
+
+  return { metaapiAccountId: account.id, state: account.state };
+}
+
+async function getAccountConnection(metaapiAccountId) {
+  const account = await api.metatraderAccountApi.getAccount(metaapiAccountId);
+  const connection = account.getStreamingConnection();
+  await connection.connect();
+  await connection.waitSynchronized();
+  return { account, connection };
+}
+
+async function getAccountInfo(metaapiAccountId) {
+  const { connection } = await getAccountConnection(metaapiAccountId);
+  return connection.terminalState.accountInformation;
+}
+
+async function getOpenPositions(metaapiAccountId) {
+  const { connection } = await getAccountConnection(metaapiAccountId);
+  return connection.terminalState.positions;
+}
+
+async function placeMarketOrder(metaapiAccountId, { symbol, direction, volume, stopLoss, takeProfit, comment }) {
+  const { connection } = await getAccountConnection(metaapiAccountId);
+
+  if (!stopLoss) {
+    throw new Error('رفض تنفيذ الصفقة: لازم تحديد وقف خسارة لكل صفقة تلقائية.');
+  }
+
+  const method = direction === 'buy' ? 'createMarketBuyOrder' : 'createMarketSellOrder';
+  const result = await connection[method](symbol, volume, stopLoss, takeProfit, {
+    comment: comment || 'auto-bot',
+  });
+  return result;
+}
+
+async function closePosition(metaapiAccountId, positionId) {
+  const { connection } = await getAccountConnection(metaapiAccountId);
+  return connection.closePosition(positionId);
+}
+
+module.exports = {
+  connectAccount,
+  getAccountInfo,
+  getOpenPositions,
+  placeMarketOrder,
+  closePosition,
+};
