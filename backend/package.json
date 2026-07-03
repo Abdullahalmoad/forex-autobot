@@ -9,10 +9,12 @@
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.45.0",
+    "axios": "^1.18.1",
     "cors": "^2.8.5",
     "dotenv": "^16.4.5",
     "express": "^4.19.2",
     "metaapi.cloud-sdk": "^29.3.3",
+    "node-cron": "^4.5.0",
     "node-telegram-bot-api": "^0.66.0"
   },
   "devDependencies": {

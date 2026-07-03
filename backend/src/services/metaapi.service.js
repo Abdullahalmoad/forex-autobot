@@ -2,7 +2,7 @@ const MetaApi = require('metaapi.cloud-sdk').default;
 
 const token = process.env.METAAPI_TOKEN;
 if (!token) {
-  console.warn('⚠️  METAAPI_TOKEN غير موجود بمتغيرات البيئة - خدمة MetaApi لن تعمل.');
+  console.warn('⚠️ METAAPI_TOKEN غير موجود - جميع عمليات MetaApi لن تعمل.');
 }
 
 const api = new MetaApi(token);
@@ -43,11 +43,24 @@ async function getOpenPositions(metaapiAccountId) {
   return connection.terminalState.positions;
 }
 
+async function getCandles(metaapiAccountId, symbol, timeframe = '15m', limit = 250) {
+  const account = await api.metatraderAccountApi.getAccount(metaapiAccountId);
+  const candles = await account.getHistoricalCandles(symbol, timeframe, undefined, limit);
+  return candles.map(c => ({
+    time: c.time,
+    open: c.open,
+    high: c.high,
+    low: c.low,
+    close: c.close,
+    volume: c.tickVolume || c.volume || 0
+  }));
+}
+
 async function placeMarketOrder(metaapiAccountId, { symbol, direction, volume, stopLoss, takeProfit, comment }) {
   const { connection } = await getAccountConnection(metaapiAccountId);
 
   if (!stopLoss) {
-    throw new Error('رفض تنفيذ الصفقة: لازم تحديد وقف خسارة لكل صفقة تلقائية.');
+    throw new Error('يُرفض تنفيذ أي صفقة بدون تحديد وقف خسارة إلزامي.');
   }
 
   const method = direction === 'buy' ? 'createMarketBuyOrder' : 'createMarketSellOrder';
@@ -66,6 +79,7 @@ module.exports = {
   connectAccount,
   getAccountInfo,
   getOpenPositions,
+  getCandles,
   placeMarketOrder,
   closePosition,
 };
