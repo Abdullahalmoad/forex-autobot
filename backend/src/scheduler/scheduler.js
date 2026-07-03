@@ -4,7 +4,7 @@ const { checkAccountSignal } = require('../routes/signals.routes');
 
 const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY);
 
-const SYMBOLS_TO_WATCH = ['EURUSD'];
+const SYMBOLS_TO_WATCH = ['EURUSD.m'];
 
 function startScheduler() {
   cron.schedule('*/15 * * * *', async () => {
