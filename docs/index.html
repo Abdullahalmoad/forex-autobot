@@ -94,7 +94,13 @@
             <span class="sym-en">${s.labelEn}${s.brokerSymbol ? ' · ' + s.brokerSymbol : ''}</span>
             ${!s.available ? '<span class="unavailable-tag">غير متاح عند وسيطك</span>' : ''}
           </div>
-          <button class="switch ${s.enabled ? 'on' : ''}" ${s.available ? '' : 'disabled'} onclick="toggleSymbol('${s.code}')"></button>
+            <button class="switch ${s.enabled ? 'on' : ''}" ${s.available ? '' : 'disabled'} onclick="toggleSymbol('${s.code}')"></button>
+            <div class="sym-settings" style="display:${s.enabled ? 'flex' : 'none'};gap:6px;align-items:center;margin-inline-start:8px;">
+              <label style="font-size:11px;color:#888;">لوت</label>
+              <input type="number" step="0.01" min="0.01" value="${s.lot_size ?? 0.01}" ${s.available ? '' : 'disabled'} onchange="updateSymbolSetting('${s.code}','lot_size',this.value)" style="width:56px;font-size:12px;padding:2px 4px;" />
+              <label style="font-size:11px;color:#888;">حد أقصى</label>
+              <input type="number" step="1" min="1" value="${s.max_open_positions ?? 1}" ${s.available ? '' : 'disabled'} onchange="updateSymbolSetting('${s.code}','max_open_positions',this.value)" style="width:44px;font-size:12px;padding:2px 4px;" />
+            </div>
         </div>`).join('');
       return `<div class="group"><div class="group-title">${items[0].groupLabel}</div>${rows}</div>`;
     }).join('');
@@ -107,13 +113,22 @@
     render();
   };
 
+    window.updateSymbolSetting = function(code, field, value) {
+      const sym = symbolsState.find((s) => s.code === code);
+      if (!sym) return;
+      const num = Number(value);
+      if (isNaN(num) || num <= 0) return;
+      sym[field] = num;
+    };
+
   async function saveSymbols() {
     saveBtn.disabled = true;
     saveBtn.textContent = 'جاري الحفظ...';
     const enabledCodes = symbolsState.filter((s) => s.enabled).map((s) => s.code);
+        const symbolSettings = symbolsState.map((s) => ({ code: s.code, lot_size: s.lot_size ?? 0.01, max_open_positions: s.max_open_positions ?? 1 }));
     try {
       const res = await fetch(`${API_BASE}/${ACCOUNT_ID}`, {
-        method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({enabledCodes})
+        method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({enabledCodes, symbolSettings})
       });
       const data = await res.json();
       if (!data.success) throw new Error(data.error || 'فشل الحفظ');

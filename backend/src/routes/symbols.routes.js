@@ -37,12 +37,20 @@ router.get('/:accountId', async (req, res) => {
     const currentlyEnabled = new Set(riskSettings?.allowed_symbols || []);
     const isFirstTime = !riskSettings;
 
-    const result = availableSymbols.map((sym) => ({
-      ...sym,
-      enabled: isFirstTime
-        ? sym.defaultOn && sym.available
-        : currentlyEnabled.has(sym.brokerSymbol),
-    }));
+      const { data: symbolSettingsRows } = await supabase
+        .from('symbol_settings')
+        .select('*')
+        .eq('broker_account_id', accountId);
+      const symbolSettingsMap = new Map((symbolSettingsRows || []).map((r) => [r.symbol_code, r]));
+
+      const result = availableSymbols.map((sym) => ({
+        ...sym,
+        enabled: isFirstTime
+          ? sym.defaultOn && sym.available
+          : currentlyEnabled.has(sym.brokerSymbol),
+        lot_size: symbolSettingsMap.get(sym.brokerSymbol)?.lot_size ?? 0.01,
+        max_open_positions: symbolSettingsMap.get(sym.brokerSymbol)?.max_open_positions ?? 1,
+      }));
 
     if (isFirstTime) {
       const defaultSymbols = result.filter((s) => s.enabled).map((s) => s.brokerSymbol);
@@ -61,7 +69,7 @@ router.get('/:accountId', async (req, res) => {
 
 router.post('/:accountId', async (req, res) => {
   const { accountId } = req.params;
-  const { enabledCodes } = req.body;
+    const { enabledCodes, symbolSettings: symbolSettingsInput } = req.body;
 
   if (!Array.isArray(enabledCodes)) {
     return res.status(400).json({ success: false, error: 'enabledCodes يجب أن تكون مصفوفة' });
@@ -81,6 +89,19 @@ router.post('/:accountId', async (req, res) => {
     });
 
     if (error) throw error;
+
+      if (Array.isArray(symbolSettingsInput)) {
+        for (const item of symbolSettingsInput) {
+          const matched = availableSymbols.find((s) => s.code === item.code);
+          if (!matched) continue;
+          await supabase.from('symbol_settings').upsert({
+            broker_account_id: accountId,
+            symbol_code: matched.brokerSymbol,
+            lot_size: item.lot_size ?? 0.01,
+            max_open_positions: item.max_open_positions ?? 1,
+          }, { onConflict: 'broker_account_id,symbol_code' });
+        }
+      }
 
     res.json({ success: true, saved: brokerSymbolsToSave });
   } catch (err) {
