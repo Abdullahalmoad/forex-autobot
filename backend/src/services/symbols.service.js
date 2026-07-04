@@ -90,7 +90,7 @@ function classifySymbol(rawName) {
 }
 
 async function fetchBrokerSymbols(metaapiAccountId) {
-  const connection = await getAccountConnection(metaapiAccountId);
+  const { connection } = await getAccountConnection(metaapiAccountId);
 
   if (!connection.synchronized) {
     await connection.waitSynchronized({ timeoutInSeconds: 60 });
