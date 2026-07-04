@@ -59,6 +59,21 @@ async function checkAccountSignal(brokerAccountId, symbol, timeframe = '15m') {
     .single();
   if (riskErr || !riskSettings) throw new Error('إعدادات المخاطرة غير موجودة لهذا الحساب');
 
+  let { data: symbolSettings } = await supabase
+    .from('symbol_settings')
+    .select('*')
+    .eq('broker_account_id', brokerAccountId)
+    .eq('symbol_code', symbol)
+    .maybeSingle();
+  if (!symbolSettings) {
+    const { data: newSymbolSettings } = await supabase
+      .from('symbol_settings')
+      .insert({ broker_account_id: brokerAccountId, symbol_code: symbol })
+      .select('*')
+      .single();
+    symbolSettings = newSymbolSettings;
+  }
+
   const candles = await getCandles(account.metaapi_account_id, symbol, timeframe, 250);
   const { signal, log } = generateSignal(candles, symbol);
 
@@ -69,7 +84,7 @@ async function checkAccountSignal(brokerAccountId, symbol, timeframe = '15m') {
   const accountInfoForStats = await getAccountInfo(account.metaapi_account_id);
   const dailyStats = await getDailyStats(brokerAccountId, accountInfoForStats.balance);
 
-  const decision = await evaluateSignal(riskSettings, signal, account.metaapi_account_id, dailyStats);
+  const decision = await evaluateSignal(riskSettings, signal, account.metaapi_account_id, dailyStats, symbolSettings);
 
   if (!decision.allowed) {
     await sendTelegramMessage(
