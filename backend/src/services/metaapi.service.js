@@ -2,10 +2,11 @@ const MetaApi = require('metaapi.cloud-sdk').default;
 
 const token = process.env.METAAPI_TOKEN;
 if (!token) {
-  console.warn('⚠️ METAAPI_TOKEN غير موجود - جميع عمليات MetaApi لن تعمل.');
+  console.warn('⚠️  METAAPI_TOKEN غير موجود بمتغيرات البيئة - خدمة MetaApi لن تعمل.');
 }
 
 const api = new MetaApi(token);
+const symbolCache = new Map();
 
 async function connectAccount({ login, password, server, accountType }) {
   const account = await api.metatraderAccountApi.createAccount({
@@ -43,24 +44,11 @@ async function getOpenPositions(metaapiAccountId) {
   return connection.terminalState.positions;
 }
 
-async function getCandles(metaapiAccountId, symbol, timeframe = '15m', limit = 250) {
-  const account = await api.metatraderAccountApi.getAccount(metaapiAccountId);
-  const candles = await account.getHistoricalCandles(symbol, timeframe, undefined, limit);
-  return candles.map(c => ({
-    time: c.time,
-    open: c.open,
-    high: c.high,
-    low: c.low,
-    close: c.close,
-    volume: c.tickVolume || c.volume || 0
-  }));
-}
-
 async function placeMarketOrder(metaapiAccountId, { symbol, direction, volume, stopLoss, takeProfit, comment }) {
   const { connection } = await getAccountConnection(metaapiAccountId);
 
   if (!stopLoss) {
-    throw new Error('يُرفض تنفيذ أي صفقة بدون تحديد وقف خسارة إلزامي.');
+    throw new Error('رفض تنفيذ الصفقة: لازم تحديد وقف خسارة لكل صفقة تلقائية.');
   }
 
   const method = direction === 'buy' ? 'createMarketBuyOrder' : 'createMarketSellOrder';
@@ -75,11 +63,48 @@ async function closePosition(metaapiAccountId, positionId) {
   return connection.closePosition(positionId);
 }
 
+async function getCandles(metaapiAccountId, symbol, timeframe = '15m', limit = 250) {
+  const account = await api.metatraderAccountApi.getAccount(metaapiAccountId);
+  const candles = await account.getHistoricalCandles(symbol, timeframe, undefined, limit);
+  const sorted = [...candles].sort((a, b) => new Date(a.time) - new Date(b.time));
+  return sorted.map(c => ({
+    time: c.time,
+    open: c.open,
+    high: c.high,
+    low: c.low,
+    close: c.close,
+    volume: c.tickVolume || c.volume || 0,
+  }));
+}
+
+const COMMON_SUFFIXES = ['', '.m', 'm', '.a', '.pro', '.raw', '_i', '.i'];
+
+async function resolveSymbol(metaapiAccountId, genericSymbol) {
+  const cacheKey = `${metaapiAccountId}:${genericSymbol}`;
+  if (symbolCache.has(cacheKey)) return symbolCache.get(cacheKey);
+
+  for (const suffix of COMMON_SUFFIXES) {
+    const candidate = `${genericSymbol}${suffix}`;
+    try {
+      const candles = await getCandles(metaapiAccountId, candidate, '15m', 2);
+      if (candles && candles.length > 0) {
+        symbolCache.set(cacheKey, candidate);
+        return candidate;
+      }
+    } catch (err) {
+      // جرب الصيغة الجاية
+    }
+  }
+  symbolCache.set(cacheKey, null);
+  return null;
+}
+
 module.exports = {
   connectAccount,
   getAccountInfo,
   getOpenPositions,
-  getCandles,
   placeMarketOrder,
   closePosition,
+  getCandles,
+  resolveSymbol,
 };
