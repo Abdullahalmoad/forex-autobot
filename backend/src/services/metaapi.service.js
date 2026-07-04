@@ -79,9 +79,33 @@ async function getCandles(metaapiAccountId, symbol, timeframe = '15m', limit = 2
 
 const COMMON_SUFFIXES = ['', '.m', 'm', '.a', '.pro', '.raw', '_i', '.i'];
 
+  function normalizeForMatch(raw) {
+    return raw.toUpperCase().replace(/[^A-Z0-9]/g, '');
+  }
+
 async function resolveSymbol(metaapiAccountId, genericSymbol) {
   const cacheKey = `${metaapiAccountId}:${genericSymbol}`;
   if (symbolCache.has(cacheKey)) return symbolCache.get(cacheKey);
+
+    try {
+      const { connection } = await getAccountConnection(metaapiAccountId);
+      if (!connection.synchronized) {
+        await connection.waitSynchronized({ timeoutInSeconds: 60 });
+      }
+      const specifications = connection.terminalState.specifications || [];
+      const targetNorm = normalizeForMatch(genericSymbol);
+      const candidates = specifications
+        .map((spec) => spec.symbol)
+        .filter((name) => normalizeForMatch(name).startsWith(targetNorm));
+      if (candidates.length > 0) {
+        candidates.sort((a, b) => a.length - b.length);
+        const best = candidates[0];
+        symbolCache.set(cacheKey, best);
+        return best;
+      }
+    } catch (err) {
+      console.error('resolveSymbol: فشل جلب specifications لـ ' + genericSymbol + ':', err.message);
+    }
 
   for (const suffix of COMMON_SUFFIXES) {
     const candidate = `${genericSymbol}${suffix}`;
