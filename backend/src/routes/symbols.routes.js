@@ -31,7 +31,7 @@ router.get('/:accountId', async (req, res) => {
     const { data: riskSettings } = await supabase
       .from('risk_settings')
       .select('allowed_symbols')
-      .eq('account_id', accountId)
+      .eq('broker_account_id', accountId)
       .single();
 
     const currentlyEnabled = new Set(riskSettings?.allowed_symbols || []);
@@ -47,7 +47,7 @@ router.get('/:accountId', async (req, res) => {
     if (isFirstTime) {
       const defaultSymbols = result.filter((s) => s.enabled).map((s) => s.brokerSymbol);
       await supabase.from('risk_settings').upsert({
-        account_id: accountId,
+        broker_account_id: accountId,
         allowed_symbols: defaultSymbols,
       });
     }
@@ -76,7 +76,7 @@ router.post('/:accountId', async (req, res) => {
       .map((s) => s.brokerSymbol);
 
     const { error } = await supabase.from('risk_settings').upsert({
-      account_id: accountId,
+      broker_account_id: accountId,
       allowed_symbols: brokerSymbolsToSave,
     });
 
