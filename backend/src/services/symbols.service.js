@@ -61,7 +61,7 @@ function classifySymbol(rawName) {
   // كريبتو
   const cryptoCode = Object.keys(CRYPTO_LABELS_AR).find((c) => norm.startsWith(c));
   if (cryptoCode) {
-    const quote = CURRENCY_CODES.concat(['USDT', 'USDC']).find((c) => norm.slice(cryptoCode.length).startsWith(c));
+    const quote = CURRENCY_CODES.concat(['USDT', 'USDC', 'XAU', 'XAG']).find((c) => norm.slice(cryptoCode.length).startsWith(c));
     const code = cryptoCode + (quote || 'USD');
     return {
       group: 'crypto', groupLabel: 'العملات الرقمية',
