@@ -1,0 +1,132 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>الأزواج المفعّلة | Forex AutoBot</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Tajawal:wght@400;500;700;900&display=swap" rel="stylesheet">
+<style>
+  :root { --bg:#0b0f14; --panel:#121821; --panel-2:#171f2b; --border:#232c3a; --text:#e8edf2; --muted:#8a97a8; --accent:#33e2a0; --off:#2a3444; --danger:#ff6b6b; }
+  * { box-sizing: border-box; }
+  body { margin:0; background:var(--bg); color:var(--text); font-family:'Tajawal',sans-serif; min-height:100vh; padding-bottom:40px; }
+  header { padding:24px 20px 16px; display:flex; align-items:center; justify-content:space-between; border-bottom:1px solid var(--border); }
+  header h1 { font-size:20px; font-weight:900; margin:0; }
+  header h1 span { color:var(--accent); }
+  .status { display:flex; align-items:center; gap:6px; font-size:12px; color:var(--muted); background:var(--panel); padding:6px 12px; border-radius:999px; border:1px solid var(--border); }
+  .dot { width:8px; height:8px; border-radius:50%; background:var(--accent); box-shadow:0 0 8px var(--accent); }
+  main { max-width:640px; margin:0 auto; padding:20px 16px; }
+  .hint { background:var(--panel); border:1px solid var(--border); border-radius:14px; padding:14px 16px; color:var(--muted); font-size:13px; line-height:1.9; margin-bottom:20px; }
+  .group { background:var(--panel); border:1px solid var(--border); border-radius:16px; margin-bottom:16px; overflow:hidden; }
+  .group-title { padding:14px 16px; font-size:14px; font-weight:700; background:var(--panel-2); border-bottom:1px solid var(--border); }
+  .row { display:flex; align-items:center; justify-content:space-between; padding:14px 16px; border-bottom:1px solid var(--border); }
+  .row:last-child { border-bottom:none; }
+  .row.unavailable { opacity:0.4; }
+  .sym-info { display:flex; flex-direction:column; gap:2px; }
+  .sym-ar { font-size:15px; font-weight:500; }
+  .sym-en { font-size:11px; color:var(--muted); letter-spacing:0.5px; }
+  .unavailable-tag { font-size:10px; color:var(--danger); margin-top:2px; }
+  .switch { position:relative; width:50px; height:28px; border-radius:999px; background:var(--off); border:none; cursor:pointer; transition:background .25s; flex-shrink:0; }
+  .switch::after { content:''; position:absolute; top:3px; right:3px; width:22px; height:22px; border-radius:50%; background:#fff; transition:transform .25s; }
+  .switch.on { background:var(--accent); }
+  .switch.on::after { transform:translateX(-22px); }
+  .switch:disabled { cursor:not-allowed; }
+  .save-bar { position:sticky; bottom:0; background:linear-gradient(to top,var(--bg) 60%,transparent); padding:18px 16px 6px; display:flex; justify-content:center; }
+  .save-btn { width:100%; max-width:600px; background:var(--accent); color:#06140f; border:none; border-radius:14px; padding:15px; font-family:'Tajawal',sans-serif; font-weight:900; font-size:15px; cursor:pointer; }
+  .save-btn:disabled { opacity:0.5; cursor:not-allowed; }
+  .toast { position:fixed; top:16px; left:50%; transform:translateX(-50%) translateY(-60px); background:var(--panel-2); border:1px solid var(--accent); color:var(--text); padding:10px 20px; border-radius:10px; font-size:13px; transition:transform .3s; z-index:50; }
+  .toast.show { transform:translateX(-50%) translateY(0); }
+  .toast.error { border-color:var(--danger); }
+  .loading, .empty { text-align:center; color:var(--muted); padding:60px 20px; font-size:14px; }
+</style>
+</head>
+<body>
+<header>
+  <h1>الأزواج <span>المفعّلة</span></h1>
+  <div class="status"><span class="dot"></span> متصل بالوسيط</div>
+</header>
+<main>
+  <div class="hint">نجيب لك تلقائياً كل الأصول المتاحة عند شركتك، ونطابقها بالاسم الصحيح. الذهب والبيتكوين مفعّلين افتراضياً.</div>
+  <div id="content"><div class="loading">جاري جلب الأصول المتاحة من الوسيط...</div></div>
+</main>
+<div class="save-bar"><button class="save-btn" id="saveBtn" disabled>حفظ التغييرات</button></div>
+<div class="toast" id="toast"></div>
+<script>
+  const API_BASE = 'https://forex-autobot-production.up.railway.app/api/symbols';
+  const params = new URLSearchParams(window.location.search);
+  const ACCOUNT_ID = params.get('account_id');
+  const contentEl = document.getElementById('content');
+  const saveBtn = document.getElementById('saveBtn');
+  const toastEl = document.getElementById('toast');
+  let symbolsState = [];
+  const GROUP_ORDER = ['metals', 'crypto', 'forex', 'forex_cross'];
+
+  function showToast(message, isError=false) {
+    toastEl.textContent = message;
+    toastEl.classList.toggle('error', isError);
+    toastEl.classList.add('show');
+    setTimeout(() => toastEl.classList.remove('show'), 2500);
+  }
+
+  async function loadSymbols() {
+    if (!ACCOUNT_ID) { contentEl.innerHTML = '<div class="empty">أضف ?account_id=رقم_حسابك بآخر الرابط</div>'; return; }
+    try {
+      const res = await fetch(`${API_BASE}/${ACCOUNT_ID}`);
+      const data = await res.json();
+      if (!data.success) throw new Error(data.error || 'فشل الجلب');
+      symbolsState = data.symbols;
+      render();
+      saveBtn.disabled = false;
+    } catch (err) {
+      contentEl.innerHTML = `<div class="empty">تعذّر جلب الأصول: ${err.message}</div>`;
+    }
+  }
+
+  function render() {
+    const groups = {};
+    symbolsState.forEach((s) => { if (!groups[s.group]) groups[s.group] = []; groups[s.group].push(s); });
+    contentEl.innerHTML = GROUP_ORDER.filter((g) => groups[g]).map((g) => {
+      const items = groups[g];
+      const rows = items.map((s) => `
+        <div class="row ${s.available ? '' : 'unavailable'}">
+          <div class="sym-info">
+            <span class="sym-ar">${s.labelAr}</span>
+            <span class="sym-en">${s.labelEn}${s.brokerSymbol ? ' · ' + s.brokerSymbol : ''}</span>
+            ${!s.available ? '<span class="unavailable-tag">غير متاح عند وسيطك</span>' : ''}
+          </div>
+          <button class="switch ${s.enabled ? 'on' : ''}" ${s.available ? '' : 'disabled'} onclick="toggleSymbol('${s.code}')"></button>
+        </div>`).join('');
+      return `<div class="group"><div class="group-title">${items[0].groupLabel}</div>${rows}</div>`;
+    }).join('');
+  }
+
+  window.toggleSymbol = function(code) {
+    const sym = symbolsState.find((s) => s.code === code);
+    if (!sym || !sym.available) return;
+    sym.enabled = !sym.enabled;
+    render();
+  };
+
+  async function saveSymbols() {
+    saveBtn.disabled = true;
+    saveBtn.textContent = 'جاري الحفظ...';
+    const enabledCodes = symbolsState.filter((s) => s.enabled).map((s) => s.code);
+    try {
+      const res = await fetch(`${API_BASE}/${ACCOUNT_ID}`, {
+        method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({enabledCodes})
+      });
+      const data = await res.json();
+      if (!data.success) throw new Error(data.error || 'فشل الحفظ');
+      showToast('✅ تم حفظ الأزواج المفعّلة بنجاح');
+    } catch (err) {
+      showToast('❌ ' + err.message, true);
+    } finally {
+      saveBtn.disabled = false;
+      saveBtn.textContent = 'حفظ التغييرات';
+    }
+  }
+  saveBtn.addEventListener('click', saveSymbols);
+  loadSymbols();
+</script>
+</body>
+</html>
