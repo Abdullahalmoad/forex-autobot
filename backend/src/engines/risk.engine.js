@@ -1,6 +1,6 @@
 const { getAccountInfo, getOpenPositions } = require('../services/metaapi.service');
 
-async function evaluateSignal(riskSettings, signal, metaapiAccountId, dailyStats) {
+async function evaluateSignal(riskSettings, signal, metaapiAccountId, dailyStats, symbolSettings) {
   const accountInfo = await getAccountInfo(metaapiAccountId);
   const positions = await getOpenPositions(metaapiAccountId);
 
@@ -8,7 +8,9 @@ async function evaluateSignal(riskSettings, signal, metaapiAccountId, dailyStats
     return { allowed: false, reason: `الرمز ${signal.symbol} غير مسموح بإعدادات المخاطرة` };
   }
 
-  if (positions.length >= riskSettings.max_open_positions) {
+  const maxOpenForSymbol = symbolSettings?.max_open_positions ?? 1;
+  const openPositionsForSymbol = positions.filter((p) => p.symbol === signal.symbol);
+  if (openPositionsForSymbol.length >= maxOpenForSymbol) {
     return { allowed: false, reason: 'تجاوز الحد الأقصى لعدد الصفقات المفتوحة' };
   }
 
@@ -36,8 +38,8 @@ async function evaluateSignal(riskSettings, signal, metaapiAccountId, dailyStats
     return { allowed: false, reason: 'مسافة وقف الخسارة غير صالحة' };
   }
 
-  let lotSize = calculateLotSize(riskAmount, slDistance, signal.symbol);
-  lotSize = Math.min(lotSize, riskSettings.max_lot_size);
+  const symLotSize = symbolSettings?.lot_size ? Number(symbolSettings.lot_size) : 0.01;
+  let lotSize = Math.min(symLotSize, riskSettings.max_lot_size);
 
   if (lotSize <= 0) {
     return { allowed: false, reason: 'حجم اللوت المحسوب صفر أو أقل - رصيد غير كافٍ' };
