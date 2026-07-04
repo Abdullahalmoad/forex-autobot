@@ -107,4 +107,5 @@ module.exports = {
   closePosition,
   getCandles,
   resolveSymbol,
+  getAccountConnection,
 };
