@@ -13,7 +13,6 @@ function startScheduler() {
         .from('broker_accounts')
         .select('id, account_type, is_active, metaapi_account_id')
         .eq('is_active', true)
-        .eq('account_type', 'demo');
 
       if (error) throw error;
 
