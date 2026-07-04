@@ -92,7 +92,7 @@ async function resolveSymbol(metaapiAccountId, genericSymbol) {
         return candidate;
       }
     } catch (err) {
-      // جرب الصيغة الجاية
+        console.error(`resolveSymbol failed for ${candidate}:`, err.message);
     }
   }
   symbolCache.set(cacheKey, null);
