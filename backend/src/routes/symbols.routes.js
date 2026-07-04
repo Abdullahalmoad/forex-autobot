@@ -90,16 +90,24 @@ router.post('/:accountId', async (req, res) => {
 
     if (error) throw error;
 
-      if (Array.isArray(symbolSettingsInput)) {
-        for (const item of symbolSettingsInput) {
-          const matched = availableSymbols.find((s) => s.code === item.code);
-          if (!matched) continue;
-          await supabase.from('symbol_settings').upsert({
-            broker_account_id: accountId,
-            symbol_code: matched.brokerSymbol,
-            lot_size: item.lot_size ?? 0.01,
-            max_open_positions: item.max_open_positions ?? 1,
-          }, { onConflict: 'broker_account_id,symbol_code' });
+      if (Array.isArray(symbolSettingsInput) && symbolSettingsInput.length > 0) {
+        const rowsToUpsert = symbolSettingsInput
+          .map((item) => {
+            const matched = availableSymbols.find((s) => s.code === item.code);
+            if (!matched) return null;
+            return {
+              broker_account_id: accountId,
+              symbol_code: matched.brokerSymbol,
+              lot_size: item.lot_size ?? 0.01,
+              max_open_positions: item.max_open_positions ?? 1,
+            };
+          })
+          .filter(Boolean);
+        if (rowsToUpsert.length > 0) {
+          const { error: symErr } = await supabase
+            .from('symbol_settings')
+            .upsert(rowsToUpsert, { onConflict: 'broker_account_id,symbol_code' });
+          if (symErr) throw symErr;
         }
       }
 
